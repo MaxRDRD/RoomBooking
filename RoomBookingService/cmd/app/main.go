@@ -1,1 +1,79 @@
 package main
+
+import (
+	"RoomBookingService/cmd/server"
+	"RoomBookingService/internal/auth"
+	"RoomBookingService/internal/handler"
+	"RoomBookingService/internal/logger"
+	"RoomBookingService/internal/repository_impl/postgres"
+	"RoomBookingService/internal/usecase"
+	"context"
+	"net/http"
+	"os"
+	"os/signal"
+	"runtime/debug"
+	"syscall"
+	"time"
+
+	"github.com/go-playground/validator"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+func main() {
+	log := logger.NewLogger()
+	ctx := logger.WithContext(context.Background(), log)
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	// DATABASE_URL с дефолтом для локальной разработки
+	connStr := os.Getenv("DATABASE_URL")
+	if connStr == "" {
+		connStr = "postgres://postgres:postgres@localhost:5432/room_booking"
+	}
+
+	// Подключение к БД
+	pool, err := pgxpool.New(ctx, connStr)
+
+	if err != nil {
+		log.Error("failed to create database pool", "error", err,
+			"stack", string(debug.Stack()))
+		panic(err)
+	}
+	defer pool.Close()
+
+	validator := validator.New()
+
+	tokenService := auth.NewJWTService()
+	userRepo := postgres.NewUserRepository(pool)
+	userService := usecase.NewUserService(userRepo, validator, tokenService)
+	userHandler := handler.NewUserHandler(userService)
+
+	// Создание роутера с зависимостями
+	h := server.NewServer(tokenService, userService, userHandler)
+
+	// Запуск сервера с graceful shutdown
+	server := &http.Server{
+		Addr:    ":" + port,
+		Handler: h,
+	}
+
+	// Graceful shutdown в отдельной горутине
+	go func() {
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+		<-sigChan
+
+		log.Info("shutting down server")
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		_ = server.Shutdown(ctx)
+	}()
+
+	log.Info("starting server", "port", port)
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Error("server error", "error", err)
+		panic(err)
+	}
+}

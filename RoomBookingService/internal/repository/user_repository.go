@@ -1,9 +1,11 @@
 package repository
 
-import "RoomBookingService/internal/model"
+import (
+	"RoomBookingService/internal/model"
+	"context"
+)
 
 type UserRepository interface {
-	Register(email, password, role string) error
-	Login(email, password string) (string, error)
-	GetUserByEmail(email string) (*model.User, error)
+	Register(ctx context.Context, user *model.User) error
+	GetUserByEmail(ctx context.Context, email string) (*model.User, error)
 }
