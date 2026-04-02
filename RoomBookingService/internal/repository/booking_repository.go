@@ -9,9 +9,8 @@ import (
 )
 
 type BookingRepository interface {
-	GetAvailableSlots(ctx context.Context, req dto.SlotsRequest) ([]model.Slot, error)                        // всем
 	CreateBooking(ctx context.Context, userID uuid.UUID, req dto.BookingRequest) (model.Booking, error)       // только user
 	CancelBooking(ctx context.Context, userID uuid.UUID, req dto.CancelBookingRequest) (model.Booking, error) // только user
 	GetMyBookings(ctx context.Context, userID uuid.UUID, filter dto.BookingFilter) ([]model.Booking, error)   // только user
-	GetAllBookings(ctx context.Context, filter dto.BookingFilter) ([]model.Booking, error)                    // только admin
+	GetAllBookings(ctx context.Context, filter dto.BookingFilter) ([]model.Booking, int, error)               // только admin
 }

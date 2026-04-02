@@ -1,4 +1,4 @@
-package usecase
+package service
 
 import (
 	"RoomBookingService/internal/auth"
@@ -69,8 +69,11 @@ func (s *authService) Register(ctx context.Context, req dto.CreateUserRequest) (
 }
 
 func (s *authService) GetUserByEmail(ctx context.Context, email string) (*dto.AuthResult, error) {
+	log := logger.FromContext(ctx)
+
 	user, err := s.userRepo.GetUserByEmail(ctx, email)
 	if err != nil {
+		log.Error("failed to get user by email", "email", email, "error", err)
 		return nil, err
 	}
 	return &dto.AuthResult{
@@ -86,7 +89,7 @@ func (s *authService) DummyLogin(ctx context.Context, role string) (*dto.TokenRe
 
 	if role != "admin" && role != "user" {
 		log.Warn("dummy login: invalid role", "role", role)
-		return nil, errors.New("invalid role")
+		return nil, myerrors.ErrInvalidRole
 	}
 
 	token, err := s.tokenService.GenerateDummyToken(role)

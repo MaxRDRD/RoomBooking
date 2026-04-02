@@ -2,18 +2,21 @@ package handler
 
 import (
 	"RoomBookingService/internal/dto"
+	"RoomBookingService/internal/httpresp"
 	"RoomBookingService/internal/logger"
-	"RoomBookingService/internal/usecase"
+	"RoomBookingService/internal/usecase/service"
+	myerrors "RoomBookingService/pkg/my_errors"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 )
 
 type UserHandler struct {
-	service usecase.AuthService
+	service service.AuthService
 }
 
-func NewUserHandler(service usecase.AuthService) *UserHandler {
+func NewUserHandler(service service.AuthService) *UserHandler {
 	return &UserHandler{service: service}
 }
 
@@ -25,25 +28,28 @@ func (h *UserHandler) RegisterUserRoutes(w http.ResponseWriter, r *http.Request)
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Warn("register: invalid body", "error", err)
-		http.Error(w, "invalid body", http.StatusBadRequest)
+		httpresp.WriteError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid body")
 		return
 	}
 
 	if role := req.Role; role != "user" && role != "admin" {
 		log.Warn("register: invalid role", "role", role)
-		http.Error(w, "invalid role", http.StatusBadRequest)
+		httpresp.WriteError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid role")
 		return
 	}
 
-	result, err := h.service.Register(ctx, req)
+	_, err := h.service.Register(ctx, req)
 	if err != nil {
+		if errors.Is(err, myerrors.ErrUserAlreadyExists) {
+			log.Warn("register: user already exists", "username", req.Username)
+			httpresp.WriteError(w, http.StatusBadRequest, "INVALID_REQUEST", "user already exists")
+			return
+		}
 		log.Error("register: service error", "error", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		httpresp.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
 		return
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	httpresp.WriteJSON(w, http.StatusCreated, map[string]string{"message": "user registered successfully"})
 
 }
 
@@ -52,32 +58,34 @@ func (h *UserHandler) DummyLogin(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(ctx)
 
 	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		httpresp.WriteError(w, http.StatusMethodNotAllowed, "INVALID_REQUEST", "method not allowed")
 		return
 	}
 
 	var req dto.DummyLoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Warn("dummy login: invalid body", "error", err)
-		http.Error(w, "invalid body", http.StatusBadRequest)
+		httpresp.WriteError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid body")
 		return
 	}
 
 	req.Role = strings.ToLower(strings.TrimSpace(req.Role))
 	if req.Role != "admin" && req.Role != "user" {
 		log.Warn("dummy login: invalid role", "role", req.Role)
-		http.Error(w, "invalid role", http.StatusBadRequest)
+		httpresp.WriteError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid role")
 		return
 	}
 
-	resp, err := h.service.DummyLogin(ctx, req.Role)
+	result, err := h.service.DummyLogin(ctx, req.Role)
 	if err != nil {
+		if errors.Is(err, myerrors.ErrInvalidRole) {
+			log.Warn("dummy login: invalid role", "role", req.Role)
+			httpresp.WriteError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid role")
+			return
+		}
 		log.Error("dummy login: service error", "error", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		httpresp.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
 		return
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(resp)
+	httpresp.WriteJSON(w, http.StatusOK, result)
 }

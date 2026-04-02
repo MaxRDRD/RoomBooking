@@ -12,5 +12,6 @@ type Booking struct {
 	SlotID    uuid.UUID
 	StartTime time.Time
 	Status    string
+	ConferenceLink *string
 	CreatedAt time.Time
 }

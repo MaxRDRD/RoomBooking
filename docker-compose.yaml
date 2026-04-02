@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: room_booking_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: room_booking
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  migrate:
+    image: postgres:16-alpine
+    container_name: room_booking_migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: postgres
+    volumes:
+      - ./RoomBookingService/migrations:/migrations:ro
+    command: >
+      sh -ec "
+        until pg_isready -h postgres -U postgres -d room_booking; do
+          sleep 1
+        done
+        for file in /migrations/*.up.sql; do
+          echo Running $$file
+          psql -h postgres -U postgres -d room_booking -f $$file
+        done
+      "
+
+  app:
+    build:
+      context: ./RoomBookingService
+      dockerfile: Dockerfile
+    container_name: room_booking_app
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/room_booking
+      PORT: 8080
+      JWT_SECRET: 9xs2p5buqpAOyOGB1d+WFaIM5ynLZXCwbTMx56t1wqM=
+      LOG_LEVEL: info
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

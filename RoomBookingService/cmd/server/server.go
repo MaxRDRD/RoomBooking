@@ -3,30 +3,21 @@ package server
 import (
 	"RoomBookingService/internal/auth"
 	"RoomBookingService/internal/handler"
-	"RoomBookingService/internal/usecase"
 	"encoding/json"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-playground/validator"
 )
 
 func NewServer(tokenService *auth.JWTService,
-	userService usecase.AuthService,
 	userHandler *handler.UserHandler,
+	roomHandler *handler.RoomHandler,
+	scheduleHandler *handler.ScheduleHandler,
+	slotHandler *handler.SlotHandler,
+	bookingHandler *handler.BookingHandler,
 ) http.Handler {
-	if tokenService == nil {
-		tokenService = auth.NewJWTService()
-	}
-	if userService == nil {
-		userService = usecase.NewUserService(nil, validator.New(), tokenService)
-	}
-	if userHandler == nil {
-		userHandler = handler.NewUserHandler(userService)
-	}
-
 	r := chi.NewRouter()
 
 	// Глобальный middleware для всех маршрутов
@@ -49,6 +40,10 @@ func NewServer(tokenService *auth.JWTService,
 		r.Get("/admin/ping", func(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte("admin ok"))
 		})
+
+		r.Post("/rooms/create", roomHandler.RegisterRoomRoutes)
+		r.Post("/rooms/{roomId}/schedule/create", scheduleHandler.CreateSchedule)
+		r.Get("/bookings/list", bookingHandler.GetAllBookings)
 	})
 
 	// Защищенные маршруты для user
@@ -61,6 +56,16 @@ func NewServer(tokenService *auth.JWTService,
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]string{"user_id": userID.String(), "role": role})
 		})
+		r.Post("/bookings/create", bookingHandler.CreateBooking)
+		r.Get("/bookings/my", bookingHandler.GetMyBookings)
+		r.Post("/bookings/{bookingId}/cancel", bookingHandler.CancelBooking)
+	})
+
+	// Защищенные маршруты для всех авторизованных пользователей
+	r.Group(func(r chi.Router) {
+		r.Use(auth.AuthMiddleware(tokenService))
+		r.Get("/rooms/list", roomHandler.GetAllRooms)
+		r.Get("/rooms/{roomId}/slots/list", slotHandler.GetAvailableSlots)
 	})
 
 	return r

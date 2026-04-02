@@ -1,8 +1,12 @@
 package dto
 
-import "github.com/google/uuid"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type SlotsRequest struct {
 	RoomID uuid.UUID `json:"roomId" binding:"required"`
-	Date   string    `json:"date" binding:"required"`
+	Date   time.Time `json:"date" binding:"required"`
 }
