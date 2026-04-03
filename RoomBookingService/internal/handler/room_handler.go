@@ -11,7 +11,6 @@ import (
 
 type RoomHandler struct {
 	roomRepo service.RoomService
-	//scheduleRepo service.ScheduleService
 }
 
 func NewRoomHandler(roomRepo service.RoomService) *RoomHandler {

@@ -5,6 +5,8 @@ import (
 	"RoomBookingService/internal/httpresp"
 	"RoomBookingService/internal/logger"
 	"RoomBookingService/internal/usecase/service"
+	myerrors "RoomBookingService/pkg/my_errors"
+	"errors"
 	"net/http"
 	"time"
 
@@ -59,6 +61,11 @@ func (h *SlotHandler) GetAvailableSlots(w http.ResponseWriter, r *http.Request) 
 
 	slots, err := h.slotService.GetAvailableSlots(r.Context(), req)
 	if err != nil {
+		if errors.Is(err, myerrors.ErrRoomNotFound) {
+			log.Warn("get available slots: room not found", "roomId", roomID)
+			httpresp.WriteError(w, http.StatusNotFound, "ROOM_NOT_FOUND", "room not found")
+			return
+		}
 		log.Error("get available slots: service error", "error", err)
 		httpresp.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
 		return

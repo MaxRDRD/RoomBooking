@@ -47,15 +47,13 @@ func getLogFile() *os.File {
 	return f
 }
 
-// WithContext добавляет логгер в контекст
 func WithContext(ctx context.Context, l *slog.Logger) context.Context {
 	return context.WithValue(ctx, loggerKey, l)
 }
 
-// FromContext достаёт логгер из контекста (с fallback)
 func FromContext(ctx context.Context) *slog.Logger {
 	if l, ok := ctx.Value(loggerKey).(*slog.Logger); ok && l != nil {
 		return l
 	}
-	return slog.Default() // fallback
+	return slog.Default()
 }

@@ -1,14 +1,10 @@
 package dto
 
-import (
-	"time"
-
-	"github.com/google/uuid"
-)
+import "github.com/google/uuid"
 
 type CreateScheduleRequest struct {
-	RoomID     uuid.UUID `json:"roomId" binding:"required"`
-	DaysOfWeek []int     `json:"daysOfWeek" binding:"required"`
-	StartTime  time.Time `json:"startTime" binding:"required"`
-	EndTime    time.Time `json:"endTime" binding:"required"`
+	RoomID     uuid.UUID `json:"-" validate:"required"`
+	DaysOfWeek []int     `json:"daysOfWeek" validate:"required,min=1,dive,min=1,max=7"`
+	StartTime  string    `json:"startTime" validate:"required"`
+	EndTime    string    `json:"endTime" validate:"required"`
 }

@@ -17,13 +17,13 @@ func NewRoomRepository(db *pgxpool.Pool) *roomRepository {
 }
 
 func (r *roomRepository) CreateRoom(ctx context.Context, room *model.Room) error {
-	query := `INSERT INTO rooms (name, capacity, created_at) VALUES ($1, $2, NOW()) RETURNING id`
-	err := r.db.QueryRow(ctx, query, room.Name, room.Capacity).Scan(&room.ID)
+	query := `INSERT INTO rooms (name, description, capacity, created_at) VALUES ($1, $2, $3, NOW()) RETURNING id`
+	err := r.db.QueryRow(ctx, query, room.Name, room.Description, room.Capacity).Scan(&room.ID)
 	return err
 }
 
 func (r *roomRepository) GetAllRooms(ctx context.Context) ([]*model.Room, error) {
-	query := `SELECT id, name, capacity, created_at FROM rooms`
+	query := `SELECT id, name, description, capacity, created_at FROM rooms`
 	rows, err := r.db.Query(ctx, query)
 	if err != nil {
 		return nil, err
@@ -33,7 +33,7 @@ func (r *roomRepository) GetAllRooms(ctx context.Context) ([]*model.Room, error)
 	var rooms []*model.Room
 	for rows.Next() {
 		var room model.Room
-		err := rows.Scan(&room.ID, &room.Name, &room.Capacity, &room.CreatedAt)
+		err := rows.Scan(&room.ID, &room.Name, &room.Description, &room.Capacity, &room.CreatedAt)
 		if err != nil {
 			return nil, myerrors.ErrRoomNotFound
 		}

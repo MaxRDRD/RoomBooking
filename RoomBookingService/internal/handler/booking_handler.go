@@ -13,15 +13,17 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-playground/validator"
 	"github.com/google/uuid"
 )
 
 type BookingHandler struct {
 	bookingService service.BookingService
+	validate       *validator.Validate
 }
 
-func NewBookingHandler(bookingService service.BookingService) *BookingHandler {
-	return &BookingHandler{bookingService: bookingService}
+func NewBookingHandler(bookingService service.BookingService, validate *validator.Validate) *BookingHandler {
+	return &BookingHandler{bookingService: bookingService, validate: validate}
 }
 
 func (h *BookingHandler) CreateBooking(w http.ResponseWriter, r *http.Request) {
@@ -33,7 +35,7 @@ func (h *BookingHandler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.SlotID == uuid.Nil {
+	if err := h.validate.Struct(req); err != nil || req.SlotID == uuid.Nil {
 		httpresp.WriteError(w, http.StatusBadRequest, "INVALID_REQUEST", "slotId is required")
 		return
 	}

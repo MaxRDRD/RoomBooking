@@ -26,7 +26,8 @@ func NewRoomService(roomRepo repository.RoomRepository) RoomService {
 func (s *roomService) CreateRoom(ctx context.Context, req dto.CreateRoomRequest) (*model.Room, error) {
 	log := logger.FromContext(ctx)
 	room := &model.Room{
-		Name: req.Name,
+		Name:        req.Name,
+		Description: req.Description,
 	}
 	if req.Capacity != nil {
 		room.Capacity = *req.Capacity

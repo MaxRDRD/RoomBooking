@@ -27,13 +27,11 @@ func main() {
 		port = "8080"
 	}
 
-	// DATABASE_URL с дефолтом для локальной разработки
 	connStr := os.Getenv("DATABASE_URL")
 	if connStr == "" {
 		connStr = "postgres://postgres:postgres@localhost:5432/room_booking"
 	}
 
-	// Подключение к БД
 	pool, err := pgxpool.New(ctx, connStr)
 
 	if err != nil {
@@ -61,19 +59,16 @@ func main() {
 
 	userHandler := handler.NewUserHandler(userService)
 	roomHandler := handler.NewRoomHandler(roomService)
-	scheduleHandler := handler.NewScheduleHandler(scheduleService)
+	scheduleHandler := handler.NewScheduleHandler(scheduleService, validator)
 	slotHandler := handler.NewSlotHandler(*slotService)
-	bookingHandler := handler.NewBookingHandler(bookingService)
-	// Создание роутера с зависимостями
+	bookingHandler := handler.NewBookingHandler(bookingService, validator)
 	h := server.NewServer(tokenService, userHandler, roomHandler, scheduleHandler, slotHandler, bookingHandler)
 
-	// Запуск сервера с graceful shutdown
 	server := &http.Server{
 		Addr:    ":" + port,
 		Handler: h,
 	}
 
-	// Graceful shutdown в отдельной горутине
 	go func() {
 		sigChan := make(chan os.Signal, 1)
 		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
