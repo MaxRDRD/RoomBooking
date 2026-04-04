@@ -28,7 +28,7 @@ func (b *bookingRepoStub) CancelBooking(_ context.Context, _ uuid.UUID, _ dto.Ca
 	return model.Booking{}, nil
 }
 
-func (b *bookingRepoStub) GetMyBookings(_ context.Context, _ uuid.UUID, _ dto.BookingFilter) ([]model.Booking, error) {
+func (b *bookingRepoStub) GetMyBookings(_ context.Context, _ uuid.UUID) ([]model.Booking, error) {
 	return nil, nil
 }
 

@@ -50,10 +50,13 @@ func (h *BookingHandler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, myerrors.ErrSlotNotFound):
+			log.Warn("create booking: slot not found", "slotId", req.SlotID)
 			httpresp.WriteError(w, http.StatusNotFound, "SLOT_NOT_FOUND", "slot not found")
 		case errors.Is(err, myerrors.ErrSlotAlreadyBooked):
+			log.Warn("create booking: slot already booked", "slotId", req.SlotID)
 			httpresp.WriteError(w, http.StatusConflict, "SLOT_ALREADY_BOOKED", "slot is already booked")
 		case errors.Is(err, myerrors.ErrInvalidRequest):
+			log.Warn("create booking: invalid request", "slotId", req.SlotID)
 			httpresp.WriteError(w, http.StatusBadRequest, "INVALID_REQUEST", "cannot create booking for past slot")
 		default:
 			log.Error("create booking: service error", "error", err)
@@ -66,15 +69,19 @@ func (h *BookingHandler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BookingHandler) CancelBooking(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
 	bookingIDStr := chi.URLParam(r, "bookingId")
 	bookingID, err := uuid.Parse(bookingIDStr)
 	if err != nil {
+		log.Warn("cancel booking: invalid bookingId", "bookingId", bookingIDStr)
 		httpresp.WriteError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid bookingId")
 		return
 	}
 
 	userID, err := auth.UserIDFromContext(r.Context())
 	if err != nil {
+		log.Warn("cancel booking: unauthorized", "error", err)
 		httpresp.WriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "unauthorized")
 		return
 	}
@@ -83,10 +90,13 @@ func (h *BookingHandler) CancelBooking(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, myerrors.ErrBookingNotFound):
+			log.Warn("cancel booking: booking not found", "bookingId", bookingID)
 			httpresp.WriteError(w, http.StatusNotFound, "BOOKING_NOT_FOUND", "booking not found")
 		case errors.Is(err, myerrors.ErrForbidden):
+			log.Warn("cancel booking: forbidden", "bookingId", bookingID)
 			httpresp.WriteError(w, http.StatusForbidden, "FORBIDDEN", "cannot cancel another user's booking")
 		default:
+			log.Error("cancel booking: service error", "error", err)
 			httpresp.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
 		}
 		return
@@ -96,14 +106,18 @@ func (h *BookingHandler) CancelBooking(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BookingHandler) GetMyBookings(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
 	userID, err := auth.UserIDFromContext(r.Context())
 	if err != nil {
+		log.Warn("get my bookings: unauthorized", "error", err)
 		httpresp.WriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "unauthorized")
 		return
 	}
 
-	bookings, err := h.bookingService.GetMyBookings(r.Context(), userID, dto.BookingFilter{})
+	bookings, err := h.bookingService.GetMyBookings(r.Context(), userID)
 	if err != nil {
+		log.Error("get my bookings: service error", "error", err)
 		httpresp.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
 		return
 	}
@@ -112,12 +126,14 @@ func (h *BookingHandler) GetMyBookings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BookingHandler) GetAllBookings(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
 	page := 1
 	pageSize := 20
 
 	if pageStr := r.URL.Query().Get("page"); pageStr != "" {
 		p, err := strconv.Atoi(pageStr)
 		if err != nil || p < 1 {
+			log.Error("get all bookings: invalid page", "page", pageStr)
 			httpresp.WriteError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid page")
 			return
 		}
@@ -127,6 +143,7 @@ func (h *BookingHandler) GetAllBookings(w http.ResponseWriter, r *http.Request) 
 	if pageSizeStr := r.URL.Query().Get("pageSize"); pageSizeStr != "" {
 		ps, err := strconv.Atoi(pageSizeStr)
 		if err != nil || ps < 1 || ps > 100 {
+			log.Error("get all bookings: invalid pageSize", "pageSize", pageSizeStr)
 			httpresp.WriteError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid pageSize")
 			return
 		}
@@ -136,6 +153,7 @@ func (h *BookingHandler) GetAllBookings(w http.ResponseWriter, r *http.Request) 
 	filter := dto.BookingFilter{Page: page, PageSize: pageSize}
 	bookings, total, err := h.bookingService.GetAllBookings(r.Context(), filter)
 	if err != nil {
+		log.Error("get all bookings: service error", "error", err)
 		httpresp.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
 		return
 	}

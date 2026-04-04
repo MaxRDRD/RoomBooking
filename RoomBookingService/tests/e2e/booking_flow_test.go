@@ -25,6 +25,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+const sharedTestDBLockID int64 = 482913741
+
 func TestE2E_CreateRoomScheduleBooking(t *testing.T) {
 	testEnv := newE2EEnv(t)
 	defer testEnv.close()
@@ -100,6 +102,11 @@ func newE2EEnv(t *testing.T) *e2eEnv {
 		t.Fatalf("database not available: %v", err)
 	}
 
+	if _, err := db.Exec(context.Background(), `SELECT pg_advisory_lock($1)`, sharedTestDBLockID); err != nil {
+		db.Close()
+		t.Fatalf("acquire db lock: %v", err)
+	}
+
 	applyMigrations(t, db)
 	resetData(t, db)
 	seedDummyUsers(t, db)
@@ -159,6 +166,7 @@ func loadDatabaseURLFromEnvFile(t *testing.T) string {
 }
 
 func (e *e2eEnv) close() {
+	_, _ = e.db.Exec(context.Background(), `SELECT pg_advisory_unlock($1)`, sharedTestDBLockID)
 	e.server.Close()
 	e.db.Close()
 }

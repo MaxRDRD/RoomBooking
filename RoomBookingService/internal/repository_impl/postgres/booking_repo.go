@@ -125,7 +125,7 @@ func (r *bookingRepository) CancelBooking(ctx context.Context, userID uuid.UUID,
 	return booking, nil
 }
 
-func (r *bookingRepository) GetMyBookings(ctx context.Context, userID uuid.UUID, _ dto.BookingFilter) ([]model.Booking, error) {
+func (r *bookingRepository) GetMyBookings(ctx context.Context, userID uuid.UUID) ([]model.Booking, error) {
 	log := logger.FromContext(ctx)
 	query := `
 		SELECT b.id, b.user_id, b.slot_id, b.status, b.conference_link, b.created_at

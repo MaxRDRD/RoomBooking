@@ -17,37 +17,43 @@ const (
 	roleContextKey   contextKey = "auth_role"
 )
 
-func AuthMiddleware(tokenService TokenService) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
-				httpresp.WriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authorization header")
-				return
-			}
+type AuthMiddleware struct {
+	tokenService TokenService
+}
 
-			if !strings.HasPrefix(authHeader, "Bearer ") {
-				httpresp.WriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing Bearer")
-				return
-			}
+func NewAuthMiddleware(tokenService TokenService) *AuthMiddleware {
+	return &AuthMiddleware{tokenService: tokenService}
+}
 
-			parts := strings.SplitN(authHeader, " ", 2)
-			if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-				httpresp.WriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "invalid authorization header")
-				return
-			}
+func (m *AuthMiddleware) JWT(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			httpresp.WriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authorization header")
+			return
+		}
 
-			userID, role, err := tokenService.ParseToken(parts[1])
-			if err != nil {
-				httpresp.WriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "invalid token")
-				return
-			}
+		if !strings.HasPrefix(authHeader, "Bearer ") {
+			httpresp.WriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing Bearer")
+			return
+		}
 
-			ctx := context.WithValue(r.Context(), userIDContextKey, userID)
-			ctx = context.WithValue(ctx, roleContextKey, role)
-			next.ServeHTTP(w, r.WithContext(ctx))
-		})
-	}
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+			httpresp.WriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "invalid authorization header")
+			return
+		}
+
+		userID, role, err := m.tokenService.ParseToken(parts[1])
+		if err != nil {
+			httpresp.WriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "invalid token")
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), userIDContextKey, userID)
+		ctx = context.WithValue(ctx, roleContextKey, role)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 
 func RequireRole(allowedRole string) func(http.Handler) http.Handler {

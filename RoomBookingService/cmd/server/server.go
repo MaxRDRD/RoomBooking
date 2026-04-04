@@ -20,19 +20,26 @@ func NewServer(tokenService *auth.JWTService,
 ) http.Handler {
 	r := chi.NewRouter()
 
+	// Глобальный middleware для всех маршрутов
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 
+	authMiddleware := auth.NewAuthMiddleware(tokenService)
+
+	// Публичные маршруты (без авторизации)
 	r.Post("/dummyLogin", userHandler.DummyLogin)
 	r.Get("/_info", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
+	r.Post("/register", userHandler.RegisterUserWithPassword)
+	r.Post("/login", userHandler.Login)
 
+	// Защищенные маршруты для admin
 	r.Group(func(r chi.Router) {
-		r.Use(auth.AuthMiddleware(tokenService))
+		r.Use(authMiddleware.JWT)
 		r.Use(auth.RequireRole("admin"))
 		r.Get("/admin/ping", func(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte("admin ok"))
@@ -43,8 +50,9 @@ func NewServer(tokenService *auth.JWTService,
 		r.Get("/bookings/list", bookingHandler.GetAllBookings)
 	})
 
+	// Защищенные маршруты для user
 	r.Group(func(r chi.Router) {
-		r.Use(auth.AuthMiddleware(tokenService))
+		r.Use(authMiddleware.JWT)
 		r.Use(auth.RequireRole("user"))
 		r.Get("/user/ping", func(w http.ResponseWriter, r *http.Request) {
 			userID, _ := auth.UserIDFromContext(r.Context())
@@ -57,8 +65,9 @@ func NewServer(tokenService *auth.JWTService,
 		r.Post("/bookings/{bookingId}/cancel", bookingHandler.CancelBooking)
 	})
 
+	// Защищенные маршруты для всех авторизованных пользователей
 	r.Group(func(r chi.Router) {
-		r.Use(auth.AuthMiddleware(tokenService))
+		r.Use(authMiddleware.JWT)
 		r.Get("/rooms/list", roomHandler.GetAllRooms)
 		r.Get("/rooms/{roomId}/slots/list", slotHandler.GetAvailableSlots)
 	})

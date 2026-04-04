@@ -10,6 +10,8 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+
+	"github.com/go-playground/validator"
 )
 
 type UserHandler struct {
@@ -88,4 +90,83 @@ func (h *UserHandler) DummyLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpresp.WriteJSON(w, http.StatusOK, result)
+}
+
+func (h *UserHandler) RegisterUserWithPassword(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.FromContext(ctx)
+	if r.Method != http.MethodPost {
+		httpresp.WriteError(w, http.StatusMethodNotAllowed, "INVALID_REQUEST", "method not allowed")
+		return
+	}
+
+	var req dto.CreateUserRequest
+	var res *dto.AuthResult
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Warn("register: invalid request", "error", err)
+		httpresp.WriteError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid request")
+		return
+	}
+
+	res, err := h.service.RegisterWithPassword(r.Context(), req)
+	if err != nil {
+		var validationErr validator.ValidationErrors
+		switch {
+		case errors.Is(err, myerrors.ErrUserAlreadyExists):
+			httpresp.WriteError(w, http.StatusBadRequest, "INVALID_REQUEST", "user already exists")
+		case errors.Is(err, myerrors.ErrInvalidRequest):
+			httpresp.WriteError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid request")
+		case errors.As(err, &validationErr):
+			httpresp.WriteError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid request")
+		default:
+			log.Error("register: internal error", "error", err, "email", req.Email)
+			httpresp.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+		}
+		return
+	}
+
+	httpresp.WriteJSON(w, http.StatusCreated, map[string]any{
+		"user": map[string]any{
+			"id":    res.UserID,
+			"email": res.Email,
+			"role":  res.Role,
+		},
+	})
+}
+
+func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.FromContext(ctx)
+	if r.Method != http.MethodPost {
+		httpresp.WriteError(w, http.StatusMethodNotAllowed, "INVALID_REQUEST", "method not allowed")
+		return
+	}
+
+	var req dto.LoginRequest
+	var res *dto.TokenResponse
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Warn("login: invalid request", "error", err)
+		httpresp.WriteError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid request")
+		return
+	}
+
+	res, err := h.service.Login(r.Context(), req)
+	if err != nil {
+		var validationErr validator.ValidationErrors
+		switch {
+		case errors.Is(err, myerrors.ErrInvalidCredentials):
+			log.Warn("login: invalid credentials", "email", req.Email)
+			httpresp.WriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "invalid credentials")
+		case errors.As(err, &validationErr):
+			httpresp.WriteError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid request")
+		default:
+			log.Error("login: internal error", "error", err, "email", req.Email)
+			httpresp.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+		}
+		return
+	}
+
+	httpresp.WriteJSON(w, http.StatusOK, res)
 }

@@ -18,15 +18,18 @@ type userRepoStub struct {
 	getByEmailErr    error
 }
 
-func (u *userRepoStub) Register(_ context.Context, _ *model.User) error {
-	return nil
-}
-
 func (u *userRepoStub) GetUserByEmail(_ context.Context, _ string) (*model.User, error) {
 	if u.getByEmailErr != nil {
 		return nil, u.getByEmailErr
 	}
 	return u.getByEmailResult, nil
+}
+
+func (u *userRepoStub) RegisterWithPassword(_ context.Context, user *model.User) error {
+	if user != nil && user.ID == uuid.Nil {
+		user.ID = uuid.New()
+	}
+	return nil
 }
 
 type tokenServiceStub struct {
@@ -43,6 +46,13 @@ func (t *tokenServiceStub) GenerateDummyToken(_ string) (string, error) {
 
 func (t *tokenServiceStub) ParseToken(_ string) (uuid.UUID, string, error) {
 	return uuid.Nil, "", errors.New("not used")
+}
+
+func (t *tokenServiceStub) GenerateToken(_ uuid.UUID, _ string) (string, error) {
+	if t.err != nil {
+		return "", t.err
+	}
+	return t.token, nil
 }
 
 func TestAuthService_DummyLogin_Success(t *testing.T) {

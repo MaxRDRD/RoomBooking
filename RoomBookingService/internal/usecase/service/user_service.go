@@ -13,12 +13,15 @@ import (
 	"strings"
 
 	"github.com/go-playground/validator"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthService interface {
 	Register(ctx context.Context, req dto.CreateUserRequest) (*dto.AuthResult, error)
 	GetUserByEmail(ctx context.Context, email string) (*dto.AuthResult, error)
 	DummyLogin(ctx context.Context, role string) (*dto.TokenResponse, error)
+	Login(ctx context.Context, req dto.LoginRequest) (*dto.TokenResponse, error)
+	RegisterWithPassword(ctx context.Context, req dto.CreateUserRequest) (*dto.AuthResult, error)
 }
 
 type authService struct {
@@ -56,13 +59,9 @@ func (s *authService) Register(ctx context.Context, req dto.CreateUserRequest) (
 		return nil, err
 	}
 
-	user := &model.User{
+	result = &dto.AuthResult{
 		Email: req.Email,
 		Role:  req.Role,
-	}
-	result = &dto.AuthResult{
-		Email: user.Email,
-		Role:  user.Role,
 	}
 
 	return result, err
@@ -99,4 +98,83 @@ func (s *authService) DummyLogin(ctx context.Context, role string) (*dto.TokenRe
 	}
 
 	return &dto.TokenResponse{Token: token}, nil
+}
+
+func (s *authService) RegisterWithPassword(ctx context.Context, req dto.CreateUserRequest) (*dto.AuthResult, error) {
+	log := logger.FromContext(ctx)
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	req.Password = strings.TrimSpace(req.Password)
+
+	if err := s.validate.Struct(req); err != nil {
+		log.Warn("auth service: register validation failed", "email", req.Email, "error", err)
+		return nil, err
+	}
+	if req.Password == "" {
+		return nil, myerrors.ErrInvalidRequest
+	}
+	var result *dto.AuthResult
+
+	_, err := s.userRepo.GetUserByEmail(ctx, req.Email)
+	if err == nil {
+		return nil, myerrors.ErrUserAlreadyExists
+	}
+	if !errors.Is(err, myerrors.ErrUserNotFound) {
+		return nil, err
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, err
+	}
+
+	user := &model.User{
+		Email:    req.Email,
+		Role:     req.Role,
+		Password: string(hash),
+	}
+	err = s.userRepo.RegisterWithPassword(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+
+	result = &dto.AuthResult{
+		UserID: user.ID,
+		Email:  req.Email,
+		Role:   req.Role,
+	}
+
+	return result, nil
+}
+
+func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.TokenResponse, error) {
+	log := logger.FromContext(ctx)
+
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	req.Password = strings.TrimSpace(req.Password)
+
+	if err := s.validate.Struct(req); err != nil {
+		log.Warn("auth service: login validation failed", "email", req.Email, "password_len", len(req.Password), "error", err)
+		return nil, err
+	}
+
+	log.Info("auth service: login attempt", "email", req.Email)
+	user, err := s.userRepo.GetUserByEmail(ctx, req.Email)
+	if err != nil {
+		log.Warn("auth service: login lookup failed", "email", req.Email, "error", err)
+		return nil, myerrors.ErrInvalidCredentials
+	}
+
+	if err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+		log.Warn("auth service: login password mismatch", "email", req.Email)
+		return nil, myerrors.ErrInvalidCredentials
+	}
+	token, err := s.tokenService.GenerateToken(user.ID, user.Role)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &dto.TokenResponse{
+		Token: token,
+	}
+	return result, nil
 }

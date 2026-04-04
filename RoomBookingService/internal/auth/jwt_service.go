@@ -18,6 +18,7 @@ const (
 
 type TokenService interface {
 	GenerateDummyToken(role string) (string, error)
+	GenerateToken(userID uuid.UUID, role string) (string, error)
 	ParseToken(tokenString string) (uuid.UUID, string, error)
 }
 
@@ -53,6 +54,23 @@ func (s *JWTService) GenerateDummyToken(role string) (string, error) {
 		return "", myerrors.ErrInvalidRole
 	}
 
+	return s.signToken(userID, role)
+}
+
+
+func (s *JWTService) GenerateToken(userID uuid.UUID, role string) (string, error) {
+	role = strings.ToLower(strings.TrimSpace(role))
+	if role != "admin" && role != "user" {
+		return "", myerrors.ErrInvalidRole
+	}
+	if userID == uuid.Nil {
+		return "", myerrors.ErrInvalidCredentials
+	}
+
+	return s.signToken(userID.String(), role)
+}
+
+func (s *JWTService) signToken(userID string, role string) (string, error) {
 	now := time.Now().UTC()
 	claims := Claims{
 		UserID: userID,
