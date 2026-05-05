@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS bookings(
+    id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL,
+    slot_id INT NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (slot_id) REFERENCES slots(id) ON DELETE CASCADE
+);
